@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agni · Thermal Intelligence</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+<style>
+/* ── TOKENS ────────────────────────────────────────────── */
+:root {
+  --bg:        #080c13;
+  --surface:   #0d1826;
+  --card:      #121e2e;
+  --raised:    #172435;
+
+  --border:    rgba(255,255,255,0.065);
+  --border-hi: rgba(255,255,255,0.11);
+
+  /* Wildfire — muted coral */
+  --fire:      #c97250;
+  --fire-lt:   #e09a76;
+  --fire-dk:   #904e30;
+  --fire-dim:  rgba(201,114,80,0.11);
+  --fire-glow: rgba(201,114,80,0.28);
+
+  /* Industrial — steel blue */
+  --ind:       #4a86a4;
+  --ind-lt:    #74aec8;
+  --ind-dk:    #2d6080;
+  --ind-dim:   rgba(74,134,164,0.11);
+  --ind-glow:  rgba(74,134,164,0.28);
+
+  /* Text */
+  --t1: #d4cfc7;
+  --t2: #7a8998;
+  --t3: #364554;
+
+  --serif: 'Lora', Georgia, serif;
+  --sans:  'DM Sans', system-ui, sans-serif;
+  --mono:  'JetBrains Mono', monospace;
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--t1);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ────────────────────────────────────────────── */
+header {
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 300;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, var(--fire-lt) 0%, var(--fire) 55%, var(--fire-dk) 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  box-shadow: 0 2px 12px var(--fire-glow);
+  flex-shrink: 0;
+}
+
+.brand-text { display: flex; flex-direction: column; gap: 1px; }
+
+.brand-name {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--t1);
+}
+
+.brand-sub {
+  font-family: var(--mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+  line-height: 1;
+}
+
+.live-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t2);
+  flex-shrink: 0;
+}
+
+.live-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #4aae80;
+  box-shadow: 0 0 7px rgba(74,174,128,0.65);
+  animation: dot-blink 3s ease-in-out infinite;
+}
+
+@keyframes dot-blink {
+  0%,100% { opacity: 1; }
+  55%      { opacity: 0.3; }
+}
+
+.h-sep { flex: 1; }
+
+.nav-link {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--t2);
+  text-decoration: none;
+  padding: 5px 12px;
+  border-radius: 7px;
+  transition: color 0.14s, background 0.14s;
+}
+
+.nav-link:hover { color: var(--t1); background: var(--card); }
+
+.nav-link.active {
+  color: var(--fire-lt);
+  background: var(--fire-dim);
+  border: 1px solid rgba(201,114,80,0.2);
+}
+
+/* ── WORKSPACE ─────────────────────────────────────────── */
+.workspace { flex: 1; display: flex; overflow: hidden; }
+
+/* ── SIDEBAR ───────────────────────────────────────────── */
+aside {
+  width: 334px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+}
+
+.sb-scroll {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--card) transparent;
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.sb-scroll::-webkit-scrollbar { width: 4px; }
+.sb-scroll::-webkit-scrollbar-thumb { background: var(--card); border-radius: 4px; }
+
+/* ── METRIC TILES ──────────────────────────────────────── */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.m-tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px 8px 11px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.m-tile::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 20%; right: 20%;
+  height: 1.5px;
+}
+
+.m-total::after { background: linear-gradient(90deg, transparent, var(--t3), transparent); }
+.m-fire::after  { background: linear-gradient(90deg, transparent, var(--fire), transparent); }
+.m-ind::after   { background: linear-gradient(90deg, transparent, var(--ind), transparent); }
+
+.m-num {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-bottom: 5px;
+  color: var(--t1);
+}
+
+.m-fire .m-num { color: var(--fire-lt); }
+.m-ind  .m-num { color: var(--ind-lt); }
+
+.m-lbl {
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+/* ── RATIO BAR ─────────────────────────────────────────── */
+.ratio-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.35s ease;
+}
+
+.ratio-wrap.open {
+  max-height: 60px;
+  opacity: 1;
+}
+
+.ratio-heads {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.ratio-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: var(--t2);
+}
+
+.ratio-pip { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ratio-pip.fire { background: var(--fire); }
+.ratio-pip.ind  { background: var(--ind); }
+
+.ratio-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.ratio-bar {
+  height: 100%;
+  border-radius: 2px;
+  width: 0;
+  transition: width 0.9s cubic-bezier(0.16,1,0.3,1);
+}
+
+/* ── PANEL ─────────────────────────────────────────────── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  font-family: var(--serif);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--t1);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: -0.01em;
+}
+
+.ptitle-icon { opacity: 0.55; font-size: 0.85rem; }
+
+.panel-tag {
+  font-family: var(--mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+.panel-body {
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── FIELD LABEL ───────────────────────────────────────── */
+.f-lbl {
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+  margin-bottom: 5px;
+}
+
+/* ── COMPASS BBOX SELECTOR ─────────────────────────────── */
+.compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.c-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.c-dir {
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  color: var(--t3);
+  width: 10px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.c-inp {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--t1);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.14s, box-shadow 0.14s;
+  appearance: textfield;
+}
+
+.c-inp::-webkit-inner-spin-button, .c-inp::-webkit-outer-spin-button { display: none; }
+
+.c-inp:focus {
+  border-color: rgba(201,114,80,0.48);
+  box-shadow: 0 0 0 2px rgba(201,114,80,0.1);
+}
+
+.c-inp.ns { width: 86px; padding: 6px 8px; }
+.c-inp.ew { width: 76px; padding: 6px 8px; }
+
+.compass-center {
+  width: 46px; height: 38px;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.compass-center::before, .compass-center::after {
+  content: '';
+  position: absolute;
+  background: var(--border-hi);
+}
+
+.compass-center::before { width: 1px; top: 7px; bottom: 7px; left: 50%; }
+.compass-center::after  { height: 1px; left: 7px; right: 7px; top: 50%; }
+
+.compass-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--fire);
+  opacity: 0.55;
+  position: relative; z-index: 1;
+}
+
+/* ── LIMIT CHIPS ───────────────────────────────────────── */
+.chips { display: flex; gap: 5px; }
+
+.chip {
+  flex: 1;
+  padding: 6px 4px;
+  text-align: center;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--t3);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.14s, background 0.14s, border-color 0.14s;
+}
+
+.chip:hover { color: var(--t2); border-color: var(--border-hi); }
+
+.chip.active {
+  color: var(--fire-lt);
+  background: var(--fire-dim);
+  border-color: rgba(201,114,80,0.3);
+}
+
+#class-filter button.class-filter-chip {
+  font-family: var(--sans);
+  color: var(--t2);
+}
+
+.class-filter-note {
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  line-height: 1.5;
+  color: var(--t3);
+}
+
+/* ── RUN BUTTON ────────────────────────────────────────── */
+.btn-run {
+  width: 100%;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, var(--fire-dk) 0%, var(--fire) 45%, var(--fire-lt) 100%);
+  background-size: 200% 200%;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--serif);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 3px 18px rgba(144,78,48,0.45);
+  animation: btn-shift 8s ease-in-out infinite;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+@keyframes btn-shift {
+  0%,100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+.btn-run:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 26px rgba(144,78,48,0.6);
+}
+
+.btn-run:active { transform: translateY(0); }
+
+.btn-run-inner {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+
+/* ── LEGEND ────────────────────────────────────────────── */
+.legend { display: flex; flex-direction: column; gap: 5px; }
+
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.leg-pip {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.leg-pip.fire { background: var(--fire); box-shadow: 0 0 8px var(--fire-glow); }
+.leg-pip.ind  { background: var(--ind);  box-shadow: 0 0 8px var(--ind-glow); }
+
+.leg-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--t1);
+  flex: 1;
+}
+
+.leg-note {
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  color: var(--t3);
+  letter-spacing: 0.04em;
+}
+
+/* ── DETECTION FEED ────────────────────────────────────── */
+.feed-lbl {
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+.feed { display: flex; flex-direction: column; gap: 5px; }
+
+.fc {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 11px;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, transform 0.14s;
+  position: relative;
+  overflow: hidden;
+}
+
+.fc::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  border-radius: 2px 0 0 2px;
+  opacity: 0;
+  transition: opacity 0.14s;
+}
+
+.fc.fc-fire::before { background: linear-gradient(to bottom, var(--fire-lt), var(--fire)); }
+.fc.fc-ind::before  { background: linear-gradient(to bottom, var(--ind-lt), var(--ind)); }
+
+.fc:hover {
+  background: var(--raised);
+  border-color: var(--border-hi);
+  transform: translateX(2px);
+}
+
+.fc:hover::before { opacity: 1; }
+
+.fc-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.fc-badge {
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 100px;
+  font-weight: 500;
+}
+
+.fc-badge.fire { background: var(--fire-dim); color: var(--fire-lt); border: 1px solid rgba(201,114,80,0.22); }
+.fc-badge.ind  { background: var(--ind-dim);  color: var(--ind-lt);  border: 1px solid rgba(74,134,164,0.22); }
+
+.fc-idx { font-family: var(--mono); font-size: 0.54rem; color: var(--t3); }
+
+.fc-coords {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--t1);
+  letter-spacing: 0.02em;
+  margin-bottom: 5px;
+}
+
+.fc-meta {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  color: var(--t2);
+  margin-bottom: 6px;
+}
+
+.conf-track { height: 2px; background: var(--raised); border-radius: 2px; overflow: hidden; }
+
+.conf-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.16,1,0.3,1);
+}
+
+.fc-fire .conf-fill { background: linear-gradient(90deg, var(--fire-dk), var(--fire-lt)); }
+.fc-ind  .conf-fill { background: linear-gradient(90deg, var(--ind-dk), var(--ind-lt)); }
+
+/* ── MAP ───────────────────────────────────────────────── */
+#map {
+  flex: 1;
+  background: #071426;
+  position: relative;
+  z-index: 1;
+}
+
+.country-label-marker {
+  background: transparent;
+  border: 0;
+}
+
+.country-label {
+  color: #aebed0;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 4px #050b14, 1px 0 4px #050b14, -1px 0 4px #050b14;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Subtle inner vignette */
+#map::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(8,12,19,0.5) 100%);
+  pointer-events: none;
+  z-index: 450;
+}
+
+/* ── LEAFLET OVERRIDES ─────────────────────────────────── */
+.leaflet-popup-content-wrapper {
+  background: var(--card) !important;
+  border: 1px solid var(--border-hi) !important;
+  border-radius: 11px !important;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.88) !important;
+  color: var(--t1) !important;
+}
+
+.leaflet-popup-tip { background: var(--card) !important; }
+.leaflet-popup-content { margin: 0 !important; padding: 0 !important; }
+.leaflet-container { font-family: var(--sans) !important; }
+
+.leaflet-control-zoom { border: none !important; box-shadow: none !important; }
+
+.leaflet-control-zoom a {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--t2) !important;
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 26px !important;
+  border-radius: 7px !important;
+  margin-bottom: 4px !important;
+  display: block !important;
+  transition: background 0.14s !important;
+  font-size: 16px !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--raised) !important;
+  color: var(--t1) !important;
+}
+
+.leaflet-bottom.leaflet-right { padding: 0 10px 10px 0; }
+
+.leaflet-control-attribution {
+  background: rgba(5,8,14,0.88) !important;
+  border-radius: 6px !important;
+  color: var(--t3) !important;
+  font-size: 9px !important;
+  border: 1px solid var(--border) !important;
+  padding: 2px 7px !important;
+}
+
+.leaflet-control-attribution a { color: var(--t2) !important; }
+
+/* ── HOVER TOOLTIP ─────────────────────────────────────── */
+#mtt {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  min-width: 186px;
+}
+
+#mtt.show { opacity: 1; transform: translateY(0); }
+
+.mtt-inner {
+  background: var(--card);
+  border: 1px solid var(--border-hi);
+  border-radius: 9px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.78);
+  backdrop-filter: blur(20px);
+}
+
+.mtt-top {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 6px;
+}
+
+.mtt-pip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.mtt-pip.fire { background: var(--fire); box-shadow: 0 0 7px var(--fire-glow); }
+.mtt-pip.ind  { background: var(--ind);  box-shadow: 0 0 7px var(--ind-glow); }
+
+.mtt-type {
+  font-family: var(--serif);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--t1);
+}
+
+.mtt-coords {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--t2);
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.mtt-stats {
+  display: flex;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+}
+
+.mtt-stat { display: flex; flex-direction: column; gap: 2px; }
+
+.mtt-val {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--t1);
+}
+
+.mtt-key {
+  font-family: var(--mono);
+  font-size: 0.49rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--t3);
+}
+
+/* ── CLICK POPUP CARD ──────────────────────────────────── */
+.pc { width: 218px; }
+
+.pc-head {
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pc-type { font-family: var(--serif); font-size: 0.78rem; font-weight: 600; }
+.pc-type.fire { color: var(--fire-lt); }
+.pc-type.ind  { color: var(--ind-lt); }
+
+.pc-conf { font-family: var(--mono); font-size: 0.58rem; color: var(--t2); }
+
+.pc-rows {
+  padding: 10px 13px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+
+.pc-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.62rem; }
+.pc-k { color: var(--t2); }
+.pc-v { color: var(--t1); font-weight: 500; }
+
+.pc-patch-row {
+  padding: 0 13px 11px;
+  display: flex; gap: 9px; align-items: flex-end;
+}
+
+.pc-patch {
+  width: 58px; height: 58px;
+  border-radius: 7px;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pc-models {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 46px;
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+
+.pcm { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; justify-content: flex-end; }
+
+.pcm-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  background: linear-gradient(to top, var(--ind-dk), var(--ind));
+}
+
+.pcm-lbl {
+  font-family: var(--mono);
+  font-size: 0.43rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+/* ── LOADING ───────────────────────────────────────────── */
+#loading {
+  position: fixed; inset: 0;
+  background: rgba(8,12,19,0.84);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 13px;
+}
+
+#loading.on { display: flex; }
+
+.loading-ring {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-hi);
+  border-top-color: var(--fire-lt);
+  border-right-color: var(--fire);
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-txt {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+
+/* ── BANNER ────────────────────────────────────────────── */
+#banner {
+  position: fixed;
+  top: 66px; left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 900;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.36s cubic-bezier(0.16,1,0.3,1),
+              transform 0.36s cubic-bezier(0.16,1,0.3,1);
+}
+
+#banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.banner-box {
+  background: var(--card);
+  border: 1px solid var(--border-hi);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 14px 44px rgba(0,0,0,0.82);
+  backdrop-filter: blur(18px);
+  min-width: 270px;
+  max-width: 400px;
+}
+
+.banner-icon {
+  font-size: 1.7rem; flex-shrink: 0;
+  animation: sway 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes sway {
+  from { transform: scale(1) rotate(-3deg); }
+  to   { transform: scale(1.07) rotate(3deg); }
+}
+
+.banner-title {
+  font-family: var(--serif);
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.banner-title.fire-t { color: var(--fire-lt); }
+.banner-title.ind-t  { color: var(--ind-lt); }
+
+.banner-sub {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+
+/* ── TOAST ─────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 18px; right: 18px;
+  background: var(--raised);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--t1);
+  z-index: 2000;
+  opacity: 0;
+  transform: translateY(7px);
+  transition: all 0.22s ease;
+  pointer-events: none;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.65);
+}
+
+#toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading" role="status">
+  <div class="loading-ring"></div>
+  <div class="loading-txt" id="loading-txt">Executing classification models</div>
+</div>
+
+<!-- Notification banner -->
+<div id="banner" role="alert">
+  <div class="banner-box">
+    <span class="banner-icon" id="b-icon">🔥</span>
+    <div>
+      <div class="banner-title" id="b-title"></div>
+      <div class="banner-sub"  id="b-sub"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hover tooltip -->
+<div id="mtt" aria-hidden="true">
+  <div class="mtt-inner">
+    <div class="mtt-top">
+      <div class="mtt-pip" id="tt-pip"></div>
+      <div class="mtt-type" id="tt-type"></div>
+    </div>
+    <div class="mtt-coords" id="tt-coords"></div>
+    <div class="mtt-stats">
+      <div class="mtt-stat">
+        <span class="mtt-val" id="tt-bright">—</span>
+        <span class="mtt-key">Brightness</span>
+      </div>
+      <div class="mtt-stat">
+        <span class="mtt-val" id="tt-frp">—</span>
+        <span class="mtt-key">FRP</span>
+      </div>
+      <div class="mtt-stat">
+        <span class="mtt-val" id="tt-conf">—</span>
+        <span class="mtt-key">Confidence</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Header -->
+<header>
+  <a href="/" class="brand">
+    <div class="brand-mark">🛰</div>
+    <div class="brand-text">
+      <span class="brand-name">Agni</span>
+      <span class="brand-sub">VIIRS Neural Intelligence</span>
+    </div>
+  </a>
+
+  <div class="live-pill">
+    <div class="live-dot"></div>
+    VIIRS Feed
+  </div>
+
+  <div class="h-sep"></div>
+
+  <a href="/" class="nav-link active">Command Map</a>
+
+</header>
+
+<!-- Workspace -->
+<div class="workspace">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="sb-scroll">
+
+      <!-- Metrics -->
+      <div class="metrics">
+        <div class="m-tile m-total">
+          <div class="m-num" id="stat-total">—</div>
+          <div class="m-lbl">Scanned</div>
+        </div>
+        <div class="m-tile m-fire">
+          <div class="m-num" id="stat-wild">—</div>
+          <div class="m-lbl">Wildfires</div>
+        </div>
+        <div class="m-tile m-ind">
+          <div class="m-num" id="stat-ind">—</div>
+          <div class="m-lbl">Industrial</div>
+        </div>
+      </div>
+
+      <!-- Map filters -->
+      <div class="panel" id="map-filter-panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="ptitle-icon">⌖</span> Map Filters
+          </div>
+          <span class="panel-tag">Area · Type</span>
+        </div>
+        <div class="panel-body">
+          <div>
+            <div class="f-lbl">Show detections</div>
+            <div class="chips" id="class-filter" role="group" aria-label="Filter detections by type">
+              <button type="button" class="chip class-filter-chip active" data-class="all" aria-pressed="true">All</button>
+              <button type="button" class="chip class-filter-chip" data-class="wildfire" aria-pressed="false">Wildfire</button>
+              <button type="button" class="chip class-filter-chip" data-class="industrial" aria-pressed="false">Industrial</button>
+            </div>
+          </div>
+          <div class="class-filter-note">Choose a detection type and area to explore.</div>
+        </div>
+      </div>
+
+      <!-- Ratio bar — revealed after data loads -->
+      <div class="ratio-wrap" id="ratio-wrap">
+        <div class="ratio-heads">
+          <div class="ratio-head">
+            <div class="ratio-pip fire"></div>
+            Wildfire <strong id="r-fire-pct" style="color:var(--t1);margin-left:2px">—</strong>%
+          </div>
+          <div class="ratio-head">
+            Industrial <strong id="r-ind-pct" style="color:var(--t1);margin-right:2px">—</strong>%
+            <div class="ratio-pip ind"></div>
+          </div>
+        </div>
+        <div class="ratio-track">
+          <div class="ratio-bar" id="ratio-bar"></div>
+        </div>
+      </div>
+
+      <!-- Fixed dataset period -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="ptitle-icon">⏱</span> Temporal Span
+          </div>
+          <span class="panel-tag">Dataset Date</span>
+        </div>
+        <div class="panel-body">
+          <div>
+            <div class="f-lbl">15 April 2024 · single-day dataset</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spatial sector -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="ptitle-icon">🗺</span> Spatial Sector
+          </div>
+          <span class="panel-tag">Bounding Box</span>
+        </div>
+        <div class="panel-body">
+
+          <div>
+            <div class="f-lbl">India · approximate bounds</div>
+            <div class="compass">
+              <!-- North -->
+              <div class="c-row">
+                <span class="c-dir">N</span>
+                <input type="number" id="lat-max" class="c-inp ns" value="37.2" step="0.1" placeholder="37.2" aria-label="North latitude">
+              </div>
+              <!-- Middle row: W — center — E -->
+              <div class="c-row">
+                <span class="c-dir">W</span>
+                <input type="number" id="lon-min" class="c-inp ew" value="68" step="0.1" placeholder="68.0" aria-label="West longitude">
+                <div class="compass-center"><div class="compass-dot"></div></div>
+                <input type="number" id="lon-max" class="c-inp ew" value="97.5" step="0.1" placeholder="97.5" aria-label="East longitude">
+                <span class="c-dir">E</span>
+              </div>
+              <!-- South -->
+              <div class="c-row">
+                <span class="c-dir">S</span>
+                <input type="number" id="lat-min" class="c-inp ns" value="6.5" step="0.1" placeholder="6.5" aria-label="South latitude">
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-run" id="run-btn" onclick="queryBuiltIn()">
+            <div class="btn-run-inner">
+              <span>⚡</span> Execute Classification
+            </div>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="ptitle-icon">🏷</span> Signature Legend
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="legend">
+            <div class="leg-item">
+              <div class="leg-pip fire"></div>
+              <span class="leg-name">Wildfire Event</span>
+              <span class="leg-note">Diurnal · spread</span>
+            </div>
+            <div class="leg-item">
+              <div class="leg-pip ind"></div>
+              <span class="leg-name">Industrial Source</span>
+              <span class="leg-note">Stable · 24/7</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detection feed -->
+      <div class="feed-lbl" id="feed-lbl">Awaiting spatial query</div>
+      <div class="feed" id="feed"></div>
+
+    </div>
+  </aside>
+
+  <!-- Map -->
+  <div id="map" role="main" aria-label="Thermal detection map"></div>
+
+</div>
+
+<script>
+/* ── MAP INIT ─────────────────────────────────────────── */
+const map = L.map('map', {
+  center: [22, 82],
+  zoom: 5,
+  zoomControl: false
+});
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+map.attributionControl.addAttribution(
+  'Country boundaries © <a href="https://www.naturalearthdata.com/">Natural Earth</a>'
+);
+
+const countryLabelLayer = L.layerGroup().addTo(map);
+let countryFeatures = [];
+
+function updateCountryLabels() {
+  countryLabelLayer.clearLayers();
+  const zoom = map.getZoom();
+  if (zoom < 3) return;
+
+  const maxLabelRank = zoom >= 5 ? 8 : zoom >= 4 ? 6 : 4;
+  const bounds = map.getBounds();
+  countryFeatures.forEach(feature => {
+    const properties = feature.properties;
+    const longitude = Number(properties.label_x);
+    const latitude = Number(properties.label_y);
+    if (!properties.name || !Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+    if (Number(properties.label_rank) > maxLabelRank || !bounds.contains([latitude, longitude])) return;
+
+    const label = document.createElement('span');
+    label.className = 'country-label';
+    label.textContent = properties.name;
+    countryLabelLayer.addLayer(L.marker([latitude, longitude], {
+      interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: 'country-label-marker',
+        html: label.outerHTML,
+        iconSize: null
+      })
+    }));
+  });
+}
+
+fetch('/api/world-outline/')
+  .then(response => {
+    if (!response.ok) throw new Error(`World outline request failed (${response.status})`);
+    return response.json();
+  })
+  .then(outline => {
+    countryFeatures = outline.features || [];
+    L.geoJSON(outline, {
+      interactive: false,
+      style: {
+        color: '#354a64',
+        weight: 1,
+        opacity: 0.95,
+        dashArray: '2 3',
+        fillColor: '#0b192b',
+        fillOpacity: 1
+      }
+    }).addTo(map);
+    updateCountryLabels();
+  })
+  .catch(error => {
+    console.error('Unable to load the world outline:', error);
+    notify('The English world outline could not be loaded.');
+  });
+
+const markerLayer = L.layerGroup().addTo(map);
+let heatLayer = null;
+let selectedClass = 'all';
+let renderedDetections = [];
+
+document.querySelectorAll('#class-filter .chip').forEach(button => {
+  button.addEventListener('click', () => {
+    selectedClass = button.dataset.class;
+    document.querySelectorAll('#class-filter .chip').forEach(chip => {
+      const active = chip === button;
+      chip.classList.toggle('active', active);
+      chip.setAttribute('aria-pressed', String(active));
+    });
+
+    let visibleCount = 0;
+    const visibleHeatPoints = [];
+    renderedDetections.forEach(detection => {
+      const visible = selectedClass === 'all' || detection.label === selectedClass;
+      if (visible) {
+        visibleCount += 1;
+        visibleHeatPoints.push(detection.heatPoint);
+        markerLayer.addLayer(detection.marker);
+      } else {
+        markerLayer.removeLayer(detection.marker);
+      }
+      detection.card.hidden = !visible;
+    });
+
+    if (heatLayer) heatLayer.setLatLngs(visibleHeatPoints);
+    const shown = selectedClass === 'all' ? 'all' : selectedClass;
+    document.getElementById('feed-lbl').textContent =
+      `${visibleCount.toLocaleString()} ${shown} detections shown`;
+  });
+});
+
+/* ── HOVER TOOLTIP ────────────────────────────────────── */
+const mtt      = document.getElementById('mtt');
+const ttPip    = document.getElementById('tt-pip');
+const ttType   = document.getElementById('tt-type');
+const ttCoords = document.getElementById('tt-coords');
+const ttBright = document.getElementById('tt-bright');
+const ttFrp    = document.getElementById('tt-frp');
+const ttConf   = document.getElementById('tt-conf');
+
+function positionTT(cx, cy) {
+  const W = 200;
+  let x = cx + 18, y = cy - 12;
+  if (x + W > window.innerWidth - 8) x = cx - W - 14;
+  mtt.style.left = x + 'px';
+  mtt.style.top  = y + 'px';
+}
+
+function showTT(e, lat, lon, p, isInd) {
+  positionTT(e.originalEvent.clientX, e.originalEvent.clientY);
+  ttPip.className   = 'mtt-pip ' + (isInd ? 'ind' : 'fire');
+  ttType.textContent   = isInd ? 'Industrial Source' : 'Wildfire Event';
+  ttCoords.textContent = `${lat.toFixed(4)}° N  ${Math.abs(lon).toFixed(4)}° ${lon < 0 ? 'W' : 'E'}`;
+  ttBright.textContent = `${(+p.brightness).toFixed(0)} K`;
+  ttFrp.textContent    = `${(+p.frp).toFixed(1)} MW`;
+  ttConf.textContent   = `${(+p.confidence).toFixed(0)}%`;
+  mtt.classList.add('show');
+}
+
+function hideTT() { mtt.classList.remove('show'); }
+function moveTT(e)  { positionTT(e.originalEvent.clientX, e.originalEvent.clientY); }
+
+/* ── RENDER GEOJSON ───────────────────────────────────── */
+function renderGeoJSON(gj) {
+  markerLayer.clearLayers();
+  renderedDetections = [];
+  if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+
+  if (!gj.features?.length) {
+    notify('No thermal anomalies detected in this sector');
+    hideLoad();
+    return;
+  }
+
+  const meta  = gj.meta || {};
+  const total = gj.features.length;
+  const wild  = meta.wildfires  || 0;
+  const ind   = meta.industrial || 0;
+
+  countUp('stat-total', total);
+  countUp('stat-wild',  wild);
+  countUp('stat-ind',   ind);
+
+  /* Ratio bar */
+  if (total > 0) {
+    const fp  = Math.round(wild / total * 100);
+    const ip  = 100 - fp;
+    const b   = 7; // blend zone
+    const b1  = Math.max(1, fp - b);
+    const b2  = Math.min(99, fp + b);
+
+    document.getElementById('r-fire-pct').textContent = fp;
+    document.getElementById('r-ind-pct').textContent  = ip;
+
+    const bar = document.getElementById('ratio-bar');
+    bar.style.background =
+      `linear-gradient(to right, var(--fire-dk) 0%, var(--fire) ${b1}%, var(--fire-lt) ${fp}%,` +
+      ` var(--ind-lt) ${fp}%, var(--ind) ${b2}%, var(--ind-dk) 100%)`;
+
+    const wrap = document.getElementById('ratio-wrap');
+    wrap.classList.add('open');
+    /* Kick off width transition on next frame */
+    requestAnimationFrame(() => { bar.style.transition = 'width 0.9s cubic-bezier(0.16,1,0.3,1)'; bar.style.width = '100%'; });
+  }
+
+  const heatPts = [];
+  const feed    = document.getElementById('feed');
+  feed.innerHTML = '';
+  document.getElementById('feed-lbl').textContent = `${total.toLocaleString()} detections loaded`;
+
+  gj.features.forEach((f, i) => {
+    const p     = f.properties;
+    const lat   = f.geometry.coordinates[1];
+    const lon   = f.geometry.coordinates[0];
+    const isInd = p.label === 'industrial';
+    const r     = Math.max(4, Math.min(13, p.marker_size || 6));
+    const conf  = Math.min(100, +(p.confidence || 0));
+
+    const detectionLabel = isInd ? 'industrial' : 'wildfire';
+    const isVisible = selectedClass === 'all' || selectedClass === detectionLabel;
+    const m = L.circleMarker([lat, lon], {
+      radius:      r,
+      fillColor:   isInd ? '#4a86a4' : '#c97250',
+      color:       isInd ? '#74aec8' : '#e09a76',
+      weight:      1.5,
+      opacity:     1,
+      fillOpacity: 0.72
+    });
+    if (isVisible) m.addTo(markerLayer);
+
+    m.on('mouseover', e => {
+      m.setStyle({ fillOpacity: 0.96, weight: 2.5, radius: r + 2 });
+      showTT(e, lat, lon, p, isInd);
+    });
+    m.on('mouseout', () => {
+      m.setStyle({ fillOpacity: 0.72, weight: 1.5, radius: r });
+      hideTT();
+    });
+    m.on('mousemove', e => moveTT(e));
+
+    /* Click popup */
+    const patchRow = p.patch_b64 ? `
+      <div class="pc-patch-row">
+        <img src="data:image/png;base64,${p.patch_b64}" class="pc-patch" alt="Thermal patch">
+        <div class="pc-models">
+          ${ ['pca','cnn'].map(k => {
+            const h = Math.max(2, ((p[`${k}_prob`] || 0) * 42));
+            return `<div class="pcm"><div class="pcm-bar" style="height:${h}px"></div><div class="pcm-lbl">${k}</div></div>`;
+          }).join('') }
+        </div>
+      </div>` : '';
+
+    m.bindPopup(`
+      <div class="pc">
+        <div class="pc-head">
+          <span class="pc-type ${isInd ? 'ind' : 'fire'}">${isInd ? 'Industrial Source' : 'Wildfire Event'}</span>
+          <span class="pc-conf">${conf.toFixed(0)}% conf.</span>
+        </div>
+        <div class="pc-rows">
+          <div class="pc-row"><span class="pc-k">Coordinates</span><span class="pc-v">${lat.toFixed(4)}, ${lon.toFixed(4)}</span></div>
+          <div class="pc-row"><span class="pc-k">Brightness</span><span class="pc-v">${(+p.brightness).toFixed(1)} K</span></div>
+          <div class="pc-row"><span class="pc-k">Fire Radiative Power</span><span class="pc-v">${(+p.frp).toFixed(1)} MW</span></div>
+          <div class="pc-row"><span class="pc-k">Date acquired</span><span class="pc-v">${String(p.acq_date).slice(0,10)}</span></div>
+        </div>
+        ${patchRow}
+      </div>
+    `, { maxWidth: 260 });
+
+    const heatPoint = [lat, lon, Math.min(1, (+p.frp) / 200)];
+    heatPts.push({ label: isInd ? 'industrial' : 'wildfire', point: heatPoint });
+
+    /* Feed card */
+    const card = document.createElement('div');
+    card.className = `fc ${isInd ? 'fc-ind' : 'fc-fire'}`;
+    card.hidden = !isVisible;
+    card.innerHTML = `
+      <div class="fc-top">
+        <span class="fc-badge ${isInd ? 'ind' : 'fire'}">${isInd ? 'Industrial' : 'Wildfire'}</span>
+        <span class="fc-idx">#${i + 1}</span>
+      </div>
+      <div class="fc-coords">${lat.toFixed(4)}°  ${Math.abs(lon).toFixed(4)}° ${lon < 0 ? 'W' : 'E'}</div>
+      <div class="fc-meta">
+        <span>${(+p.brightness).toFixed(0)} K</span>
+        <span>${(+p.frp).toFixed(0)} MW</span>
+        <span>${String(p.acq_date).slice(0,10)}</span>
+      </div>
+      <div class="conf-track"><div class="conf-fill" style="width:${conf}%"></div></div>
+    `;
+    card.addEventListener('click', () => { hideTT(); map.setView([lat, lon], 10); m.openPopup(); });
+    feed.appendChild(card);
+    renderedDetections.push({
+      label: detectionLabel,
+      marker: m,
+      card,
+      heatPoint
+    });
+  });
+
+  /* Heat layer — warm yellow-orange thermal spectrum */
+  const visibleHeatPoints = heatPts
+    .filter(detection => selectedClass === 'all' || detection.label === selectedClass)
+    .map(detection => detection.point);
+  heatLayer = L.heatLayer(visibleHeatPoints, {
+    radius: 26,
+    blur: 20,
+    maxZoom: 10,
+    gradient: {
+      0:    'rgba(0,0,0,0)',
+      0.18: '#180a02',
+      0.38: '#6e2c0a',
+      0.58: '#b85a18',
+      0.76: '#d88828',
+      0.88: '#ecca48',
+      1:    '#fef280'
+    }
+  }).addTo(map);
+  const visibleCount = renderedDetections.filter(detection =>
+    selectedClass === 'all' || detection.label === selectedClass
+  ).length;
+  document.getElementById('feed-lbl').textContent =
+    `${visibleCount.toLocaleString()} ${selectedClass === 'all' ? 'all' : selectedClass} detections shown`;
+
+  hideLoad();
+  setTimeout(() => showBanner(wild, ind), 320);
+  notify(`${total.toLocaleString()} thermal signatures classified`);
+}
+
+/* ── BANNER ───────────────────────────────────────────── */
+function showBanner(wild, ind) {
+  const el    = document.getElementById('banner');
+  const isInd = ind > wild;
+  document.getElementById('b-icon').textContent  = isInd ? '🏭' : '🔥';
+  const t = document.getElementById('b-title');
+  t.textContent  = isInd
+    ? `${ind} industrial source${ind !== 1 ? 's' : ''} identified`
+    : `${wild} wildfire event${wild !== 1 ? 's' : ''} detected`;
+  t.className    = 'banner-title ' + (isInd ? 'ind-t' : 'fire-t');
+  document.getElementById('b-sub').textContent = `${wild} wildfires · ${ind} industrial`;
+
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 4400);
+}
+
+/* ── COUNT-UP ANIMATION ───────────────────────────────── */
+function countUp(id, target) {
+  const el   = document.getElementById(id);
+  let   n    = 0;
+  const step = Math.max(1, Math.ceil(target / 24));
+  const t    = setInterval(() => {
+    n = Math.min(n + step, target);
+    el.textContent = n.toLocaleString();
+    if (n >= target) clearInterval(t);
+  }, 28);
+}
+
+/* ── LOADING ──────────────────────────────────────────── */
+function showLoad(msg) {
+  document.getElementById('loading-txt').textContent = msg || 'Executing classification models';
+  document.getElementById('loading').classList.add('on');
+}
+
+function hideLoad() {
+  document.getElementById('loading').classList.remove('on');
+}
+
+/* ── TOAST ────────────────────────────────────────────── */
+function notify(msg, dur = 3200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── MAP BOUNDS → INPUTS ──────────────────────────────── */
+map.on('moveend zoomend', () => {
+  const b = map.getBounds();
+  document.getElementById('lat-min').value = b.getSouth().toFixed(2);
+  document.getElementById('lat-max').value = b.getNorth().toFixed(2);
+  document.getElementById('lon-min').value = b.getWest().toFixed(2);
+  document.getElementById('lon-max').value = b.getEast().toFixed(2);
+  updateCountryLabels();
+});
+
+/* ── BUILT-IN QUERY ───────────────────────────────────── */
+function queryBuiltIn() {
+  showLoad();
+  const params = new URLSearchParams({
+    lat_min:   document.getElementById('lat-min').value,
+    lat_max:   document.getElementById('lat-max').value,
+    lon_min:   document.getElementById('lon-min').value,
+    lon_max:   document.getElementById('lon-max').value,
+  });
+
+  fetch(`/api/data/?${params}`)
+    .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+    .then(renderGeoJSON)
+    .catch(err => { hideLoad(); notify('Error: ' + err.message); });
+}
+
+/* ── AUTO-LOAD ────────────────────────────────────────── */
+{% if has_data %}
+window.addEventListener('load', () => queryBuiltIn());
+{% endif %}
+</script>
+</body>
+</html>
