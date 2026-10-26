@@ -1,15 +1,13 @@
-__pycache__/
 *.pyc
-*.pyo
+__pycache__/
+data/patches.npy
+data/patch_labels.npy
+data/patch_meta.csv
+data/firms_labelled.csv
+data/fire_archive_SV-C2_823956.csv
+data/fire_nrt_SV-C2_823956.csv
+data/nc/
+models/cnn_model.pth
+models/pca_model.pkl
 .env
-db.sqlite3
-staticfiles/
-media/
 *.log
-.DS_Store
-# Ignore heavy raw data files inside research/data/
-research/data/*.nc
-research/data/*.csv
-
-# (Optional) Keep the data directory structure tracked in git
-!research/data/.gitkeep
